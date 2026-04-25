@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Devon · Webcam Intelligence Platform</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ─────────────────── TOP BAR ─────────────────── -->
+  <header id="topbar">
+    <div class="tb-logo">
+      <div class="tb-glyph">
+        <svg viewBox="0 0 18 18" fill="none" stroke="white" stroke-width="1.5">
+          <circle cx="9" cy="9" r="3"/>
+          <circle cx="9" cy="9" r="7" stroke-dasharray="3 2"/>
+          <path d="M9 2V5M9 13v3M2 9h3M13 9h3" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="tb-title-group">
+        <div class="tb-title">Devon Intelligence Platform</div>
+        <div class="tb-sub">Webcam · OSINT · Geospatial</div>
+      </div>
+    </div>
+
+    <div class="tb-sep"></div>
+
+    <span class="tb-pill live">System Live</span>
+    <span class="tb-pill">UNCLASSIFIED // OSINT</span>
+    <span class="tb-pill" id="tb-feeds">— feeds active</span>
+
+    <div class="tb-sep"></div>
+
+    <div class="tb-search">
+      <svg class="tb-search-icon" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="6.5" cy="6.5" r="4.5"/>
+        <path d="M10.5 10.5l3 3" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="search" placeholder="Search locations, webcams…" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div class="tb-filters">
+      <button class="tb-filter active" data-filter="all">All</button>
+      <button class="tb-filter" data-filter="BEACH">Beach</button>
+      <button class="tb-filter" data-filter="HARBOUR">Harbour</button>
+      <button class="tb-filter" data-filter="URBAN">Urban</button>
+      <button class="tb-filter" data-filter="RURAL">Rural</button>
+    </div>
+  </header>
+
+  <!-- ─────────────────── MAIN ─────────────────── -->
+  <main id="main">
+
+    <!-- LEFT PANEL: Object browser -->
+    <aside id="panel-left">
+      <div class="panel-hd">
+        <span class="panel-hd-label">Webcam Assets</span>
+        <span class="panel-hd-count" id="obj-count">18 objects</span>
+      </div>
+
+      <!-- Category dots legend -->
+      <div class="cat-strip">
+        <div class="cat-dot">
+          <div class="cat-dot-circle" style="background:#1a6fe8"></div>Beach
+        </div>
+        <div class="cat-dot">
+          <div class="cat-dot-circle" style="background:#00d4ff"></div>Harbour
+        </div>
+        <div class="cat-dot">
+          <div class="cat-dot-circle" style="background:#e87722"></div>Urban
+        </div>
+        <div class="cat-dot">
+          <div class="cat-dot-circle" style="background:#22c55e"></div>Rural
+        </div>
+      </div>
+
+      <div class="obj-list" id="obj-list">
+        <!-- populated by JS -->
+      </div>
+    </aside>
+
+    <!-- MAP -->
+    <div id="map-wrap">
+      <div id="map"></div>
+
+      <!-- floating badges -->
+      <div class="map-badge-tray">
+        <span class="map-badge region">Devon · England · UK</span>
+        <span class="map-badge class">OSINT Source Data</span>
+      </div>
+
+      <!-- cursor coords -->
+      <div class="map-coords">
+        <div class="lbl">Cursor</div>
+        <div class="val" id="coord-lat">51.0000° N</div>
+        <div class="val" id="coord-lng">3.8500° W</div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Detail view -->
+    <aside id="panel-right">
+
+      <!-- Empty state -->
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.2">
+            <circle cx="24" cy="24" r="10"/>
+            <circle cx="24" cy="24" r="20" stroke-dasharray="5 3"/>
+            <path d="M24 4v6M24 38v6M4 24h6M38 24h6" stroke-linecap="round"/>
+            <circle cx="24" cy="24" r="3" fill="currentColor" opacity=".4"/>
+          </svg>
+        </div>
+        <div class="empty-msg">
+          Select a webcam marker on the map<br>or choose an asset from the entity list<br>to view live feed and intelligence data.
+        </div>
+      </div>
+
+      <!-- Populated detail -->
+      <div class="detail-wrap">
+
+        <!-- Header -->
+        <div class="det-hd">
+          <div class="det-type" id="det-type">WEBCAM_ASSET</div>
+          <div class="det-name" id="det-name">—</div>
+          <div class="det-coords" id="det-coords">—</div>
+        </div>
+
+        <!-- Live feed -->
+        <div class="feed-wrap">
+          <div class="feed-hd">
+            <span class="feed-lbl" id="feed-lbl">LIVE FEED</span>
+            <span class="feed-live">
+              <span class="feed-live-dot"></span>STREAMING
+            </span>
+          </div>
+          <div id="feed-content">
+            <div class="feed-fallback">
+              <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.9L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+              </svg>
+              <span>No feed selected</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="det-tabs">
+          <div class="det-tab active" data-tab="props">Properties</div>
+          <div class="det-tab" data-tab="intel">Intelligence</div>
+          <div class="det-tab" data-tab="osm">OSM Data</div>
+        </div>
+
+        <div class="det-body">
+
+          <!-- ── Properties tab ── -->
+          <div class="tab-pane active" id="pane-props">
+            <div class="prop-sec">
+              <div class="prop-sec-title">Asset Properties</div>
+              <div class="prop-row">
+                <span class="prop-k">status</span>
+                <span class="prop-v" id="p-status">—</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-k">category</span>
+                <span class="prop-v blue" id="p-cat">—</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-k">resolution</span>
+                <span class="prop-v mono" id="p-res">—</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-k">bearing</span>
+                <span class="prop-v mono" id="p-bearing">—</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-k">feed_type</span>
+                <span class="prop-v mono" id="p-feed">—</span>
+              </div>
+            </div>
+
+            <div class="prop-sec">
+              <div class="prop-sec-title">Geospatial</div>
+              <div class="prop-row">
+                <span class="prop-k">latitude</span>
+                <span class="prop-v mono" id="p-lat">—</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-k">longitude</span>
+                <span class="prop-v mono" id="p-lng">—</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-k">region</span>
+                <span class="prop-v">Devon, England</span>
+              </div>
+              <div class="prop-row">
+                <span class="prop-k">data_conf</span>
+                <span class="prop-v green" id="p-conf-val">—</span>
+              </div>
+              <div class="conf-bar" style="margin-top:4px">
+                <div class="conf-fill" id="p-conf" style="width:0%"></div>
+              </div>
+            </div>
+
+            <div style="padding-top:4px">
+              <a class="ext-link" id="p-srclink" href="#" target="_blank" rel="noopener">↗ Open webcam source page</a>
+            </div>
+          </div>
+
+          <!-- ── Intelligence tab ── -->
+          <div class="tab-pane" id="pane-intel">
+            <div class="prop-sec-title" style="margin-bottom:10px">Wikipedia Extract</div>
+            <div id="wiki-content">
+              <div class="async-loading"><div class="spinner"></div>Awaiting selection…</div>
+            </div>
+          </div>
+
+          <!-- ── OSM Data tab ── -->
+          <div class="tab-pane" id="pane-osm">
+            <div id="osm-loader" class="async-loading" style="display:none">
+              <div class="spinner"></div>Querying Overpass API…
+            </div>
+            <div id="osm-content"></div>
+          </div>
+
+        </div><!-- /det-body -->
+      </div><!-- /detail-wrap -->
+    </aside>
+
+  </main>
+
+  <!-- ─────────────────── STATUS BAR ─────────────────── -->
+  <footer id="statusbar">
+    <div class="sb-item grn" id="sb-live">● 0 live feeds</div>
+    <div class="sb-sep"></div>
+    <div class="sb-item">Region: Devon, England (50.2°N – 51.2°N)</div>
+    <div class="sb-sep"></div>
+    <div class="sb-item">Sources: Wikipedia · OpenStreetMap · Public CCTV</div>
+    <div class="sb-item sb-right" id="sb-time">—</div>
+  </footer>
+
+  <div id="accent-line"></div>
+
+</div><!-- /app -->
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
+
+<!-- App data & logic -->
+<script src="src/webcams.js"></script>
+<script src="src/app.js"></script>
+
+</body>
+</html>
