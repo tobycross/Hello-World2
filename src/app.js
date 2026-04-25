@@ -118,7 +118,8 @@ function renderDetail(wc) {
   qs('#p-cat').textContent    = `${wc.cat} / ${wc.sub}`;
   qs('#p-res').textContent    = wc.resolution;
   qs('#p-bearing').textContent= wc.bearing;
-  qs('#p-feed').textContent   = wc.feedType.toUpperCase();
+  const feedLabel = wc.feedType === 'youtube' ? 'YOUTUBE LIVE' : 'EXTERNAL LINK';
+  qs('#p-feed').textContent   = feedLabel;
   qs('#p-lat').textContent    = wc.lat.toFixed(6) + '° N';
   qs('#p-lng').textContent    = Math.abs(wc.lng).toFixed(6) + '° W';
   qs('#p-conf').style.width   = wc.confidence + '%';
@@ -126,7 +127,7 @@ function renderDetail(wc) {
 
   const srcLink = qs('#p-srclink');
   srcLink.href = wc.pageUrl;
-  srcLink.textContent = '↗ Open webcam source page';
+  srcLink.textContent = `↗ ${wc.sourceLabel}`;
 
   /* Feed */
   loadFeed(wc);
@@ -144,38 +145,53 @@ function loadFeed(wc) {
   refreshTimers = {};
 
   const box = qs('#feed-content');
-  qs('#feed-lbl').textContent = wc.feedType === 'iframe' ? 'EMBEDDED SOURCE' : `LIVE IMAGE · ${wc.resolution}`;
 
-  if (wc.feedType === 'image') {
-    const imgId = `fi-${Date.now()}`;
-    const fbId  = `fb-${Date.now()}`;
-    box.innerHTML = `
-      <img id="${imgId}" src="${wc.imageUrl}?_t=${Date.now()}" class="feed-img" alt="${wc.name} live feed"
-           onerror="document.getElementById('${imgId}').style.display='none';document.getElementById('${fbId}').style.display='flex'">
-      <div id="${fbId}" class="feed-fallback" style="display:none">
-        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.9L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
-        </svg>
-        <span>Live image unavailable</span>
-        <a href="${wc.pageUrl}" target="_blank" rel="noopener">↗ View on source website</a>
-      </div>`;
-
-    if (wc.refreshMs) {
-      refreshTimers[wc.id] = setInterval(() => {
-        const img = qs(`#${imgId}`);
-        if (img) img.src = wc.imageUrl + '?_t=' + Date.now();
-      }, wc.refreshMs);
-    }
-  } else {
+  const feedLiveEl = qs('#feed-live-badge');
+  if (wc.feedType === 'youtube') {
+    qs('#feed-lbl').textContent = `YOUTUBE LIVE · ${wc.resolution}`;
+    if (feedLiveEl) feedLiveEl.style.display = 'flex';
     box.innerHTML = `
       <div class="feed-iframe-box">
-        <iframe src="${wc.embedUrl || wc.pageUrl}"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          referrerpolicy="no-referrer"
-          allow="autoplay"
-          title="${wc.name} webcam"
+        <iframe
+          src="https://www.youtube.com/embed/${wc.youtubeId}?autoplay=1&mute=1&rel=0&modestbranding=1"
+          allow="autoplay; fullscreen; picture-in-picture"
+          allowfullscreen
+          title="${escHtml(wc.name)} live cam"
           loading="lazy">
         </iframe>
+      </div>`;
+  } else {
+    if (feedLiveEl) feedLiveEl.style.display = 'none';
+    /* 'link' type — source is not cross-origin embeddable.
+       Show a location map thumbnail with a prominent "Open Feed" CTA. */
+    qs('#feed-lbl').textContent = 'EXTERNAL FEED';
+    const mapTile = `https://staticmap.openstreetmap.de/staticmap.php?center=${wc.lat},${wc.lng}&zoom=14&size=368x195&maptype=mapnik`;
+    const hostname = (() => { try { return new URL(wc.pageUrl).hostname.replace(/^www\./, ''); } catch { return wc.sourceLabel; } })();
+    box.innerHTML = `
+      <div style="position:relative;width:100%;height:195px;overflow:hidden;background:#06091a">
+        <img src="${mapTile}" alt="Location map"
+          style="width:100%;height:100%;object-fit:cover;filter:brightness(0.28) saturate(0.5) hue-rotate(195deg)"
+          onerror="this.style.display='none'">
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px">
+          <div style="font:500 11px/1 'Inter',sans-serif;color:rgba(196,208,232,.55);letter-spacing:.03em">
+            ${escHtml(wc.sourceLabel)}
+          </div>
+          <a href="${escHtml(wc.pageUrl)}" target="_blank" rel="noopener"
+             style="display:inline-flex;align-items:center;gap:8px;padding:10px 22px;
+                    background:#1a6fe8;border-radius:4px;color:#fff;
+                    font:600 13px/1 'Inter',sans-serif;text-decoration:none;
+                    box-shadow:0 0 20px rgba(26,111,232,.4);transition:background .15s"
+             onmouseover="this.style.background='#3d8ef8'"
+             onmouseout="this.style.background='#1a6fe8'">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Open Live Feed
+          </a>
+          <div style="font:400 9.5px/1 'JetBrains Mono',monospace;color:rgba(196,208,232,.3);letter-spacing:.05em">
+            ${escHtml(hostname)}
+          </div>
+        </div>
       </div>`;
   }
 }
@@ -343,9 +359,10 @@ function switchTab(name) {
 
 /* ── Status bar clock ───────────────────────────────────────── */
 function updateStatusBar() {
-  const live = WEBCAMS.filter(w => w.status === 'LIVE').length;
-  qs('#sb-live').textContent   = `● ${live} live feeds`;
-  qs('#tb-feeds').textContent  = live + ' feeds active';
+  const ytCount   = WEBCAMS.filter(w => w.feedType === 'youtube').length;
+  const linkCount = WEBCAMS.filter(w => w.feedType === 'link').length;
+  qs('#sb-live').textContent  = `● ${ytCount} embedded · ${linkCount} external`;
+  qs('#tb-feeds').textContent = `${ytCount} YouTube live · ${linkCount} linked`;
 }
 
 function tickClock() {
